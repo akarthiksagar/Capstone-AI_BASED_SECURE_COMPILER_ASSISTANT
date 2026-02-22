@@ -1,0 +1,35 @@
+// Obfuscated vulnerability example
+// Tests the de-obfuscation pass in the middle-end
+
+// Obfuscation attempt 1: String concatenation
+dangerous_func = "ev" + "al"
+x = dangerous_func("1 + 1")
+
+// Obfuscation attempt 2: Variable indirection
+e = "e"
+v = "v"
+a = "a"
+l = "l"
+func_name = e + v + a + l
+result = func_name("2 * 3")
+
+// Obfuscation attempt 3: Getattr pattern
+import os
+method = "sys" + "tem"
+cmd = "echo hello"
+// This should be detected after constant propagation
+
+// Obfuscation attempt 4: Base64 encoded (conceptual)
+// In real code this would decode and execute
+encoded = "ZXZhbA=="  // base64 for "eval"
+
+// Obfuscation attempt 5: Character code construction
+codes = [101, 118, 97, 108]  // ASCII for "eval"
+
+// Normal safe code mixed in
+def safe_function(x, y) {
+    return x + y
+}
+
+total = safe_function(5, 10)
+print(total)

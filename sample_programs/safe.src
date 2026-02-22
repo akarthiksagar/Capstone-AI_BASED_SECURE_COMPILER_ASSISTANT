@@ -1,0 +1,81 @@
+// Safe example program - no security issues
+// Demonstrates proper coding practices
+
+// Configuration
+MAX_RETRIES = 3
+TIMEOUT = 30
+
+// Safe string operations
+def sanitize_input(text) {
+    // Simple sanitization - remove dangerous characters
+    clean = ""
+    for char in text {
+        if char != "<" and char != ">" {
+            clean = clean + char
+        }
+    }
+    return clean
+}
+
+// Safe math operations
+def safe_divide(a, b) {
+    if b == 0 {
+        print("Error: Division by zero")
+        return None
+    }
+    return a / b
+}
+
+// Fibonacci using recursion
+def fibonacci(n) {
+    if n <= 0 {
+        return 0
+    }
+    if n == 1 {
+        return 1
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2)
+}
+
+// Factorial using iteration
+def factorial(n) {
+    result = 1
+    i = 1
+    while i <= n {
+        result = result * i
+        i = i + 1
+    }
+    return result
+}
+
+// List operations
+def find_max(numbers) {
+    if len(numbers) == 0 {
+        return None
+    }
+    max_val = numbers[0]
+    for num in numbers {
+        if num > max_val {
+            max_val = num
+        }
+    }
+    return max_val
+}
+
+// Main program
+print("=== Safe Program Demo ===")
+clean_text = sanitize_input("<script>alert('xss')</script>")
+print(clean_text)
+
+result = safe_divide(10, 2)
+print(result)
+
+fib_10 = fibonacci(10)
+print(fib_10)
+
+fact_5 = factorial(5)
+print(fact_5)
+
+numbers = [3, 1, 4, 1, 5, 9, 2, 6]
+max_num = find_max(numbers)
+print(max_num)
