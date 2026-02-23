@@ -145,7 +145,7 @@ class Frontend:
         from .ast_builder import ASTBuilder
         from .semantic_analyzer import SemanticAnalyzer
         from .security_walker import SecurityWalker
-
+        from .llm_security_checker import FrontendLLMSecurityChecker
         result = CompilationResult(success=True)
 
         tokens, lex_errors = self.lexer.tokenize(source)
@@ -179,10 +179,16 @@ class Frontend:
         result.merge(semantic_result)
 
         walker = SecurityWalker()
-        security_issues = walker.analyze(self.ast)
-        for issue in security_issues:
+        static_security_issues = walker.analyze(self.ast)
+        for issue in static_security_issues:
             result.add_security_issue(issue)
 
+        if not static_security_issues:
+            llm_checker = FrontendLLMSecurityChecker()
+            llm_security_issues = llm_checker.analyze(source)
+            for issue in llm_security_issues:
+                result.add_security_issue(issue)
+                
         return result
 
     def get_ast(self):

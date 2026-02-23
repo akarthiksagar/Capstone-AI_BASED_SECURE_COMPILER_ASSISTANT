@@ -106,7 +106,8 @@ def compile_source(source: str, filepath: str, args) -> tuple:
 
     if frontend_result.security_issues:
         print(f"Frontend detected {len(frontend_result.security_issues)} security issue(s)")
-
+        logger.phase_complete("Frontend", success=False)
+        return result, None
     logger.phase_complete("Frontend", success=True)
 
     ast = frontend.get_ast()

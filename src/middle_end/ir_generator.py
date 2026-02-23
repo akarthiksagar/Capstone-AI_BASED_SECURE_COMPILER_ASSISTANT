@@ -35,6 +35,8 @@ class IRGenerator(ASTVisitor):
         return self.program
 
     def _emit(self, instr: IRInstruction) -> None:
+        instr.metadata.setdefault("source_line", instr.line)
+        instr.metadata.setdefault("source_column", 0)
         self.instructions.append(instr)
 
     def _current_instructions(self) -> List[IRInstruction]:

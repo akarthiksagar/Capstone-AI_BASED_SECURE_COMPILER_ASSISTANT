@@ -8,6 +8,7 @@ from .ir import (
 )
 from .optimization.deobfuscation import DeobfuscationPass
 from .optimization.constant_propagation import ConstantPropagation
+from .llm_ir_security_analyzer import LLMIRSecurityAnalyzer
 from ..utils.errors import SecurityIssue, Severity, CompilationResult
 
 
@@ -52,6 +53,7 @@ class MiddleEndSecurityAnalyzer:
         self.security_issues: List[SecurityIssue] = []
         self.const_prop = ConstantPropagation()
         self.deobfuscation = DeobfuscationPass()
+        self.llm_ir_analyzer = LLMIRSecurityAnalyzer()
 
     def analyze(self, program: IRProgram) -> CompilationResult:
         result = CompilationResult(success=True)
@@ -74,6 +76,10 @@ class MiddleEndSecurityAnalyzer:
                     source=TaintSource.UNKNOWN
                 )
             self._analyze_taint(func.instructions)
+
+        llm_issues = self.llm_ir_analyzer.analyze(program)
+        for issue in llm_issues:
+            self.security_issues.append(issue)
 
         for issue in self.security_issues:
             result.add_security_issue(issue)
