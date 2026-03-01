@@ -1,2 +1,2 @@
-datasets/raw
-venv
+venv/
+__pycache__/
