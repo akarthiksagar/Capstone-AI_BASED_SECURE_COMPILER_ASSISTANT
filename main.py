@@ -606,7 +606,6 @@ if semantic.errors:
 
 print("Semantic analysis complete")
 
-
 # 3️⃣ IR Generation
 print("\n====== IR GENERATION ======")
 ir_builder = IRBuilder()
@@ -712,4 +711,3 @@ for X, edge_index, edge_types, labels, batch_ids, code_list in loader:
 accuracy = total_correct / total
 
 print("\nTraining Accuracy (1 epoch demo):", round(accuracy, 4))
-
