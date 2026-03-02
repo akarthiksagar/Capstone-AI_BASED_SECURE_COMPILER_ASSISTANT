@@ -386,3 +386,5 @@ class ASTBuilder(SecureLangVisitor):
             ctx.start.line,
             ctx.start.column
         )
+    def generic_visit(self,node):
+        return None

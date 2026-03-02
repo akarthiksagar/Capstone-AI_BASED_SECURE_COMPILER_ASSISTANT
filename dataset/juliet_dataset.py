@@ -1,44 +1,95 @@
-from frontend.parser.parser import parse_source
-from frontend.semantic.semantic_analyzer import SemanticAnalyzer
+import random
+import json
+import os
 
-from middleend.ir.ir_builder import IRBuilder
-from middleend.ir.ssa_transform import SSATransformer
+VARIABLES = ["a", "b", "c", "data", "user", "input_val", "cmd"]
+SINKS = ["exec", "query"]
+CONSTANTS = ["1", "5", "10", "100"]
 
-from analysis.pdg_builder import PDGBuilder
-from analysis.graph_to_pyg import GraphToPyGConverter
+def rand_var():
+    return random.choice(VARIABLES)
+
+def rand_const():
+    return random.choice(CONSTANTS)
+
+def generate_noise_block(var):
+    """Generate irrelevant computation to make graph complex"""
+    tmp = rand_var()
+    return f"""
+{tmp} = {rand_const()}
+if {tmp} > 3 {{
+    {tmp} = {tmp} + 1
+}}
+"""
+
+def generate_vulnerable():
+
+    src = rand_var()
+    inter = rand_var()
+    sink = random.choice(SINKS)
+
+    noise = generate_noise_block(src)
+
+    code = f"""
+{src} = input()
+{noise}
+if {rand_const()} > 2 {{
+    {inter} = {src}
+}} else {{
+    {inter} = sanitize({src})
+}}
+{sink}({inter})
+"""
+
+    return code.strip(), 1
 
 
-class SecureCompilerPipeline:
+def generate_safe():
 
-    def __init__(self):
-        pass
+    src = rand_var()
+    inter = rand_var()
+    sink = random.choice(SINKS)
 
-    def compile_to_pdg(self, source_code):
+    noise = generate_noise_block(src)
 
-        # 1️⃣ Parse
-        ast = parse_source(source_code)
+    code = f"""
+{src} = input()
+{noise}
+if {rand_const()} > 2 {{
+    {inter} = sanitize({src})
+}} else {{
+    {inter} = sanitize({src})
+}}
+{sink}({inter})
+"""
 
-        # 2️⃣ Semantic analysis
-        semantic = SemanticAnalyzer()
-        ast.accept(semantic)
+    return code.strip(), 0
 
-        if semantic.errors:
-            return None, semantic.errors
 
-        # 3️⃣ IR generation
-        ir_builder = IRBuilder()
-        cfg = ir_builder.visit_Program(ast)
+def generate_dataset(n_samples=5000):
 
-        # 4️⃣ SSA transform
-        ssa = SSATransformer(cfg)
-        cfg = ssa.transform()
+    dataset = []
 
-        # 5️⃣ Build PDG
-        pdg_builder = PDGBuilder(cfg)
-        pdg = pdg_builder.build()
+    for _ in range(n_samples // 2):
+        code, label = generate_vulnerable()
+        dataset.append({"code": code, "label": label})
 
-        # 6️⃣ Convert to PyG
-        converter = GraphToPyGConverter(pdg)
-        pyg_graph = converter.convert()
+    for _ in range(n_samples // 2):
+        code, label = generate_safe()
+        dataset.append({"code": code, "label": label})
 
-        return pyg_graph, None
+    random.shuffle(dataset)
+
+    return dataset
+
+
+if __name__ == "__main__":
+
+    os.makedirs("dataset", exist_ok=True)
+
+    data = generate_dataset(5000)
+
+    with open("dataset/securelang_juliet.json", "w") as f:
+        json.dump(data, f, indent=2)
+
+    print("Generated 5000-sample dataset.")
