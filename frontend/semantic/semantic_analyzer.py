@@ -286,7 +286,18 @@ class SemanticAnalyzer(ASTVisitor):
             if builtin_result:
                 node.type, node.security_label = builtin_result
                 return
+                # 🔥 Sink detection logic here
+                if node.function.name == "exec" and node.args:
+                    arg = node.args[0]
+                    arg.accept(self)
 
+                    if arg.security_label.level == SecurityLevel.UNTRUSTED:
+                        self.report_error(
+                            "Tainted data passed to exec()",
+                            node,
+                            security_related=True
+                        )
+                return
         # If not builtin, resolve normally
         node.function.accept(self)
 

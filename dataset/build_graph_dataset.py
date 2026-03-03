@@ -10,7 +10,7 @@ from analysis.pdg_builder import PDGBuilder
 from analysis.graph_tensorizer import GraphTensorizer
 
 
-INPUT_FILE = "dataset/juliet_securelang.json"
+INPUT_FILE = "dataset/secure_synthetic_10k.json"
 OUTPUT_FILE = "dataset/graph_dataset.pt"
 
 

@@ -18,5 +18,7 @@ class BuiltinRegistry:
 
         if name == "len":
             return Type.INT, SecurityLabel(SecurityLevel.TRUSTED)
-
+        
+        if name=="exec":
+            return Type.NONE,SecurityLabel(SecurityLevel.TRUSTED)
         return None

@@ -557,15 +557,8 @@ from analysis.pdg_builder import PDGBuilder
 from analysis.graph_tensorizer import GraphTensorizer
 
 code = """
-x = input()
-if x {
-    y = x + 1
-}
-else {
-    y = 0
-}
-return y
-
+user = input()
+exec(user)
 """
 
 
@@ -603,9 +596,7 @@ if semantic.errors:
     for e in semantic.errors:
         print(e)
     exit()
-
 print("Semantic analysis complete")
-
 # 3️⃣ IR Generation
 print("\n====== IR GENERATION ======")
 ir_builder = IRBuilder()

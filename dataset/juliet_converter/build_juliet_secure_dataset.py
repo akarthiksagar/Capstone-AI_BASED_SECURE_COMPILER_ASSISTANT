@@ -1,71 +1,139 @@
-import json
-import os
-from juliet_loader import collect_c_files, is_vulnerable_file
-from c_ast_extractor import parse_c_file, FunctionExtractor
-from c_to_securelang import CToSecureLangConverter
-from juliet_text_extractor import collect_c_files, clean_code, extract_functions
+# dataset/juliet_converter/build_juliet_text_dataset.py
 
-def is_vulnerable_function(name):
-    return "bad" in name
+import os
+import json
+import re
+from tqdm import tqdm
+
+# -----------------------------------
+# CONFIG
+# -----------------------------------
+
+JULIET_ROOT = "dataset/juliet_raw/C/testcases"
+OUTPUT_FILE = "dataset/juliet_processed.json"
+
+MAX_FUNCTION_LENGTH = 5000   # skip huge functions
+MIN_FUNCTION_LENGTH = 50     # skip trivial ones
+
+# -----------------------------------
+# UTILITIES
+# -----------------------------------
 
 def collect_c_files(root):
-    c_files=[]
-
+    c_files = []
     for root_dir, _, files in os.walk(root):
-        for file in files[:5]:
-            if file.endswith(".c"):
-                c_files.append(os.path.join(root_dir, file))
-
+        for f in files:
+            if f.endswith(".c"):
+                c_files.append(os.path.join(root_dir, f))
     return c_files
 
-def build_dataset(juliet_root, output_file):
 
-    c_files = collect_c_files(juliet_root)
+def remove_comments(code):
+    # Remove /* ... */ comments
+    code = re.sub(r"/\*.*?\*/", "", code, flags=re.DOTALL)
+    # Remove // comments
+    code = re.sub(r"//.*", "", code)
+    return code
+
+
+def remove_preprocessor(code):
+    lines = code.splitlines()
+    clean_lines = [line for line in lines if not line.strip().startswith("#")]
+    return "\n".join(clean_lines)
+
+
+def extract_functions(code):
+    """
+    Extract C functions using brace matching.
+    This is simple but robust enough for Juliet.
+    """
+    functions = []
+    pattern = re.compile(r"\b(?:void|int|char|float|double|long|short)\s+\w+\s*\([^)]*\)\s*\{", re.MULTILINE)
+
+    for match in pattern.finditer(code):
+        start = match.start()
+        brace_count = 0
+        i = start
+        while i < len(code):
+            if code[i] == "{":
+                brace_count += 1
+            elif code[i] == "}":
+                brace_count -= 1
+                if brace_count == 0:
+                    functions.append(code[start:i+1])
+                    break
+            i += 1
+
+    return functions
+
+
+def label_function(func):
+    """
+    Juliet naming convention:
+    bad() functions are vulnerable.
+    good() functions are safe.
+    """
+    if re.search(r"\bbad\s*\(", func):
+        return 1
+    if re.search(r"\bgood", func):
+        return 0
+    return None
+
+
+def is_supported(func):
+    """
+    Filter out very complex or irrelevant functions.
+    """
+    if len(func) < MIN_FUNCTION_LENGTH:
+        return False
+    if len(func) > MAX_FUNCTION_LENGTH:
+        return False
+    return True
+
+
+# -----------------------------------
+# MAIN BUILDER
+# -----------------------------------
+
+def build_dataset():
+    dataset = []
+    c_files = collect_c_files(JULIET_ROOT)
 
     print("Total C files found:", len(c_files))
 
-    dataset = []
+    for path in tqdm(c_files):
+        try:
+            with open(path, "r", errors="ignore") as f:
+                raw = f.read()
 
-    for file in c_files:
+            code = remove_comments(raw)
+            code = remove_preprocessor(code)
 
-            ast = parse_c_file(file)
-            if ast is None:
-                continue
+            functions = extract_functions(code)
 
-            collector = FunctionExtractor()
-            collector.visit(ast)
+            for func in functions:
+                label = label_function(func)
+                if label is None:
+                    continue
 
-            for func in collector.functions:
-
-                func_name = func.decl.name
-                label = 1 if is_vulnerable_function(func_name) else 0
-
-                converter = CToSecureLangConverter()
-                secure_code = converter.convert(func)
-
-                if secure_code.strip() == "":
+                if not is_supported(func):
                     continue
 
                 dataset.append({
-                    "code": secure_code,
+                    "code": func.strip(),
                     "label": label
                 })
 
-    with open(output_file, "w") as f:
-        json.dump(dataset, f, indent=2)
+        except Exception:
+            continue
 
     print("Generated samples:", len(dataset))
 
-# ===============================================
-# ENTRY POINT (THIS IS THE PATH YOU ASKED ABOUT)
-# ===============================================
+    with open(OUTPUT_FILE, "w") as f:
+        json.dump(dataset, f, indent=2)
+
+    print("Saved to:", OUTPUT_FILE)
+
 
 if __name__ == "__main__":
-
-    # 🔥 CHANGE THIS TO YOUR JULIET ROOT DIRECTORY
-    juliet_root_path = "/home/karthik/Documents/compiler_design/Capstone-AI_BASED_SECURE_COMPILER_ASSISTANT/dataset/juliet_raw/C/testcases"
-
-    output_path = "/home/karthik/Documents/compiler_design/Capstone-AI_BASED_SECURE_COMPILER_ASSISTANT/dataset/juliet_securelang.json"
-
-    build_dataset(juliet_root_path, output_path)
-
+    build_dataset()
