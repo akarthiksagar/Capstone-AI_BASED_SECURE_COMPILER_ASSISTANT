@@ -1,4 +1,4 @@
-// Generated from /home/karthik/Documents/compiler_design/Capstone-AI_BASED_SECURE_COMPILER_ASSISTANT/grammar/SecureLang.g4 by ANTLR 4.13.1
+// Generated from d:/compiler-design/Capstone-AI_BASED_SECURE_COMPILER_ASSISTANT/grammar/SecureLang.g4 by ANTLR 4.13.1
 import org.antlr.v4.runtime.Lexer;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.Token;
