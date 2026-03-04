@@ -1,34 +1,21 @@
 import torch
+from models.hybrid_model import HybridModel
 from models.graph_dataset import SecureGraphDataset
-from models.hybrid_model import HybridModel   # import your model architecture
 
-# Initialize the model architecture
-model = HybridModel()
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Load the trained weights
-state_dict = torch.load("models/hybrid_model.pt", map_location=torch.device("cpu"))
-model.load_state_dict(state_dict)
+# Load dataset
+dataset = SecureGraphDataset("dataset/graph_dataset.pt")
 
-# Set model to evaluation mode
+sample = dataset[0]
+graph_input_dim = sample["X"].size(1)
+
+# Create model architecture
+model = HybridModel(graph_input_dim).to(device)
+
+# Load trained weights
+model.load_state_dict(torch.load("models/hybrid_secure_10k.pt", map_location=device))
+
 model.eval()
 
-code = """
-x = input()
-a = x
-b = a
-c = b
-exec(c)
-"""
-
-# Convert code to graph
-graph = SecureGraphDataset(code)
-
-with torch.no_grad():
-    out = model(graph.x, graph.edge_index, None)
-
-pred = torch.argmax(out, dim=1).item()
-
-if pred == 1:
-    print("⚠ Vulnerable Code Detected")
-else:
-    print("✓ Code is Safe")
+print("Model loaded successfully!")
