@@ -14,7 +14,7 @@ graph_input_dim = sample["X"].size(1)
 model = HybridModel(graph_input_dim).to(device)
 
 # Load trained weights
-model.load_state_dict(torch.load("models/hybrid_secure_10k.pt", map_location=device))
+model.load_state_dict(torch.load("models/hybrid_model.pt", map_location=device))
 
 model.eval()
 
