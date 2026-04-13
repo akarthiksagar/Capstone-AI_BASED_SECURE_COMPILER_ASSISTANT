@@ -275,34 +275,42 @@ class SemanticAnalyzer(ASTVisitor):
 
     def visit_FunctionCall(self, node):
 
-        # First check if function is Identifier
+        # Visit arguments first
+        for arg in node.args:
+            arg.accept(self)
+
+        # Check builtin functions
         if isinstance(node.function, Identifier):
 
-            builtin_result = BuiltinRegistry.handle_builtin(
-                node.function.name,
-                node.args
-            )
+            name = node.function.name
+
+            builtin_result = BuiltinRegistry.handle_builtin(name, node.args)
 
             if builtin_result:
                 node.type, node.security_label = builtin_result
-                return
-                # 🔥 Sink detection logic here
-                if node.function.name == "exec" and node.args:
-                    arg = node.args[0]
-                    arg.accept(self)
 
-                    if arg.security_label.level == SecurityLevel.UNTRUSTED:
-                        self.report_error(
-                            "Tainted data passed to exec()",
-                            node,
-                            security_related=True
-                        )
-                return
-        # If not builtin, resolve normally
+            # -------------------------
+            # 🔥 Sink Detection
+            # -------------------------
+            
+            if name == "exec" and node.args:
+
+                arg = node.args[0]
+
+                if arg.security_label.level == SecurityLevel.UNTRUSTED:
+                    self.report_error(
+                        "Untrusted data passed to exec()",
+                        node,
+                        security_related=True
+                    )
+
+            return
+
+        # -------------------------
+        # Normal function resolution
+        # -------------------------
+
         node.function.accept(self)
-
-        for arg in node.args:
-            arg.accept(self)
 
         try:
             func_symbol = self.symbol_table.resolve_function(node.function.name)

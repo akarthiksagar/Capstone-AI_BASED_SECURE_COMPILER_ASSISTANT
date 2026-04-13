@@ -557,8 +557,11 @@ from analysis.pdg_builder import PDGBuilder
 from analysis.graph_tensorizer import GraphTensorizer
 
 code = """
-user = input()
-exec(user)
+x = input()
+a = x
+b = a
+c = b
+exec(c)
 """
 
 
