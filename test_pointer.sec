@@ -1,4 +1,0 @@
-x = input()
-ptr p=&x
-y=*p
-exec()

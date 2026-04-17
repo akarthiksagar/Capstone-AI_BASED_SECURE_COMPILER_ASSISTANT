@@ -1,0 +1,59 @@
+{
+  "model": {
+    "name": "SecureCompilerGNN",
+    "description": "Hybrid GNN + CodeBERT for vulnerability detection",
+    "graph_input_dim": 256,
+    "gnn_hidden_dim": 128,
+    "gnn_output_dim": 128,
+    "code_embedding_dim": 768,
+    "fusion_hidden_dim": 512,
+    "num_classes": 2
+  },
+  "training": {
+    "batch_size": 16,
+    "epochs": 50,
+    "learning_rate": 2e-5,
+    "weight_decay": 1e-5,
+    "warmup_steps": 1000,
+    "gradient_clip": 1.0,
+    "early_stopping_patience": 5,
+    "early_stopping_metric": "f1"
+  },
+  "gnn": {
+    "num_layers": 3,
+    "dropout": 0.3,
+    "edge_types": ["DATA_DEP", "CONTROL_DEP"],
+    "aggregation": "mean",
+    "use_attention": true
+  },
+  "codebert": {
+    "model_name": "microsoft/codebert-base",
+    "freeze_layers": 8,
+    "max_length": 256,
+    "pooling": "cls"
+  },
+  "data": {
+    "dataset_dir": "dataset/",
+    "train_file": "dataset/train_graphs.pt",
+    "val_file": "dataset/val_graphs.pt",
+    "test_file": "dataset/test_graphs.pt",
+    "train_split": 0.7,
+    "val_split": 0.15,
+    "test_split": 0.15,
+    "balance_classes": true,
+    "augmentation": true
+  },
+  "evaluation": {
+    "metrics": ["accuracy", "precision", "recall", "f1", "auc_roc"],
+    "per_class_metrics": true,
+    "confusion_matrix": true,
+    "vulnerability_types": ["command_injection", "sql_injection", "path_traversal"]
+  },
+  "output": {
+    "model_save_path": "models/secure_gnn_best.pt",
+    "checkpoint_dir": "models/checkpoints/",
+    "log_dir": "logs/",
+    "save_frequency": 5
+  },
+  "device": "auto"
+}
