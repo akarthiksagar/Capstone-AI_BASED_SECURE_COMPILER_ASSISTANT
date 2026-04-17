@@ -1,21 +1,29 @@
 import os
 import json
 import requests
-from github import Github
 import time
 from tqdm import tqdm
 import argparse
+from typing import Optional
+
+try:
+    from github import Github
+except ImportError:
+    Github = None
 
 class DatasetCollector:
     def __init__(self, github_token=None):
         self.github_token = github_token
-        self.github = Github(github_token) if github_token else None
+        self.github = Github(github_token) if (github_token and Github is not None) else None
         self.dataset = []
 
     def collect_from_github_search(self, query="vulnerable OR security flaw", language="python", max_repos=100):
         """Collect code snippets from GitHub search"""
         if not self.github:
-            print("GitHub token required for GitHub collection")
+            if self.github_token and Github is None:
+                print("PyGithub is not installed. Install it to enable GitHub collection.")
+            else:
+                print("GitHub token required for GitHub collection")
             return
 
         repos = self.github.search_repositories(query=f"{query} language:{language}", sort="stars", order="desc")
@@ -48,41 +56,81 @@ class DatasetCollector:
             except:
                 continue
 
-    def collect_from_cve_database(self, max_cves=500):
-        """Collect from NVD CVE database"""
-        url = "https://services.nvd.nist.gov/rest/json/cves/1.0"
-        params = {
-            'resultsPerPage': 100,
-            'startIndex': 0
-        }
+    @staticmethod
+    def _extract_cve_info(item: dict) -> Optional[dict]:
+        """
+        Normalize CVE payloads from both NVD v2.0 and v1.0 APIs.
+        Returns None if required fields are missing.
+        """
+        # NVD 2.0 shape
+        cve_block = item.get("cve")
+        if cve_block:
+            cve_id = cve_block.get("id")
+            descriptions = cve_block.get("descriptions", [])
+            description = next((d.get("value", "") for d in descriptions if d.get("lang") == "en"), "")
+            if not description and descriptions:
+                description = descriptions[0].get("value", "")
+            if cve_id and description:
+                return {"cve_id": cve_id, "description": description}
 
+        # NVD 1.0 shape
+        cve = item.get("cve", {})
+        cve_meta = cve.get("CVE_data_meta", {})
+        cve_id = cve_meta.get("ID")
+        desc_entries = cve.get("description", {}).get("description_data", [])
+        description = desc_entries[0].get("value", "") if desc_entries else ""
+        if cve_id and description:
+            return {"cve_id": cve_id, "description": description}
+
+        return None
+
+    def collect_from_cve_database(self, max_cves=500):
+        """Collect CVE descriptions from NVD API."""
+        endpoint = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+        start_index = 0
+        page_size = 100
         collected = 0
+
         while collected < max_cves:
+            params = {"resultsPerPage": page_size, "startIndex": start_index}
             try:
-                response = requests.get(url, params=params)
+                response = requests.get(endpoint, params=params, timeout=20)
+                response.raise_for_status()
                 data = response.json()
 
-                for cve in data['result']['CVE_Items']:
-                    cve_id = cve['cve']['CVE_data_meta']['ID']
-                    description = cve['cve']['description']['description_data'][0]['value']
+                items = data.get("vulnerabilities", [])
+                if not items:
+                    break
 
-                    # Extract code-like snippets from description if any
-                    if 'code' in description.lower() or any(kw in description.lower() for kw in ['sql', 'exec', 'eval', 'system']):
+                for wrapped in items:
+                    parsed = self._extract_cve_info(wrapped)
+                    if not parsed:
+                        continue
+
+                    description = parsed["description"]
+                    cve_id = parsed["cve_id"]
+
+                    # Keep entries likely to contain executable/security-relevant behavior text
+                    if "code" in description.lower() or any(
+                        kw in description.lower() for kw in ["sql", "exec", "eval", "system", "command injection"]
+                    ):
                         self.dataset.append({
-                            'source': 'cve',
-                            'cve_id': cve_id,
-                            'description': description,
-                            'language': 'unknown',
-                            'code': '',  # Will need manual extraction
-                            'vulnerable': True,
-                            'url': f"https://nvd.nist.gov/vuln/detail/{cve_id}"
+                            "source": "cve",
+                            "cve_id": cve_id,
+                            "description": description,
+                            "language": "unknown",
+                            "code": "",  # No direct snippet in most CVE entries
+                            "vulnerable": True,
+                            "url": f"https://nvd.nist.gov/vuln/detail/{cve_id}"
                         })
                         collected += 1
+                        if collected >= max_cves:
+                            break
 
-                params['startIndex'] += 100
-                time.sleep(1)  # Rate limiting
-
-            except:
+                start_index += page_size
+                time.sleep(0.8)  # Basic rate limiting
+            except Exception as e:
+                print(f"CVE collection stopped at {collected} items due to error: {e}")
                 break
 
     def collect_from_owasp(self):
@@ -157,9 +205,11 @@ def main():
 
     print("Collecting from OWASP examples...")
     collector.collect_from_owasp()
+    print(f"Current samples: {len(collector.dataset)}")
 
     print("Collecting from CVE database...")
     collector.collect_from_cve_database(args.max_cve)
+    print(f"Current samples: {len(collector.dataset)}")
 
     if args.github_token:
         print("Collecting from GitHub...")
