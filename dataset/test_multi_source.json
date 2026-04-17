@@ -1,0 +1,16 @@
+[
+  {
+    "source": "owasp",
+    "language": "python",
+    "code": "\ndef vulnerable_sql(user_input):\n    import sqlite3\n    conn = sqlite3.connect('test.db')\n    cursor = conn.cursor()\n    query = f\"SELECT * FROM users WHERE name = '{user_input}'\"\n    cursor.execute(query)\n    return cursor.fetchall()\n                ",
+    "vulnerable": true,
+    "type": "sql_injection"
+  },
+  {
+    "source": "owasp",
+    "language": "c",
+    "code": "\n#include <stdio.h>\n#include <string.h>\n\nvoid vulnerable_buffer(char *input) {\n    char buffer[10];\n    strcpy(buffer, input);  // Buffer overflow\n    printf(\"%s\\n\", buffer);\n}\n                ",
+    "vulnerable": true,
+    "type": "buffer_overflow"
+  }
+]

@@ -161,44 +161,112 @@ Get-Content training.log -Wait
 
 ---
 
-## 🧪 Evaluation
+## 🆕 New Multi-Source Dataset Pipeline
 
-### Comprehensive Test
+### Overview
+
+The new pipeline collects code from multiple real-world sources, translates any language to SecureLang, and builds comprehensive vulnerability datasets.
+
+**Key Features:**
+
+- ✅ Multi-source collection (GitHub, CVE databases, OWASP)
+- ✅ Universal language translation (Python, C/C++, JavaScript)
+- ✅ Enhanced SecureLang grammar for security analysis
+- ✅ Automatic vulnerability labeling
+- ✅ Real-world code patterns
+
+### Step 1: Collect Multi-Source Data
 
 ```bash
-python evaluate_model.py --checkpoint models/secure_gnn_best.pt
+# Collect from multiple sources
+python dataset/multi_source_collector.py --github-token YOUR_TOKEN --output dataset/multi_source_dataset.json
 ```
 
-**Generates:**
+**Sources Included:**
 
-- `logs/evaluation_report.json` - Detailed metrics
-- `logs/confusion_matrix.png` - Visualization
-- Console output with:
-  - Overall accuracy/precision/recall/F1
-  - Per-vulnerability-type metrics
-  - Error analysis (false positives/negatives)
+- **GitHub**: Search vulnerable code repositories
+- **CVE Database**: Real vulnerability descriptions from NVD
+- **OWASP**: Standard vulnerability examples
+- **Custom**: Add your own sources
 
-### Example Output
+### Step 2: Translate & Build Dataset
 
+```bash
+# Translate all languages to SecureLang and build graphs
+python dataset/build_multi_source_dataset.py --input dataset/multi_source_dataset.json --output dataset/multi_source_graph_dataset.pt
 ```
-EVALUATION SUMMARY
-==========================================================
-Overall Performance:
-  Accuracy:  0.8934
-  Precision (Safe/Vulnerable):    0.9012 / 0.8856
-  Recall    (Safe/Vulnerable):    0.8845 / 0.9023
-  F1-Score  (Safe/Vulnerable):    0.8928 / 0.8939
-  AUC-ROC:   0.9467
 
-Per-Vulnerability Type Performance:
-  command_injection (234 samples):
-    F1: 0.8912, Recall: 0.8976
-  sql_injection (189 samples):
-    F1: 0.8834, Recall: 0.8945
-  path_traversal (145 samples):
-    F1: 0.8765, Recall: 0.8821
-==========================================================
+**What happens:**
+
+1. Loads collected code samples
+2. Translates each to SecureLang using universal translator
+3. Compiles to PDG graphs
+4. Labels vulnerabilities automatically
+5. Splits into train/val/test sets
+
+### Step 3: Train on Multi-Source Data
+
+```bash
+# Use the new dataset
+python train_model.py --config model_config.json --dataset dataset/train_graphs.pt
 ```
+
+### Enhanced SecureLang Grammar
+
+**New Security Constructs:**
+
+- Exception handling: `try/except/finally`
+- Context managers: `with` statements
+- Assertions: `assert` statements
+- Security sinks: `exec`, `eval`, `system`, `sql`, `open`, `connect`, `deserialize`
+- Security sources: `input`, `getenv`, `request`
+
+**Example SecureLang Code:**
+
+```securelang
+def vulnerable_web_handler(request_data) {
+    user_input = request("POST", "user_input")
+    // SQL injection vulnerability
+    query = sql("SELECT * FROM users WHERE id = " + user_input)
+    return query
+}
+
+def safe_web_handler(request_data) {
+    user_input = request("POST", "user_input")
+    // Safe: parameterized query
+    query = sql("SELECT * FROM users WHERE id = ?", user_input)
+    return query
+}
+```
+
+### Dataset Statistics
+
+After building, check `dataset/dataset_stats.json`:
+
+```json
+{
+  "total_samples": 2500,
+  "vulnerable": 1250,
+  "safe": 1250,
+  "sources": {
+    "github": 1500,
+    "cve": 500,
+    "owasp": 500
+  },
+  "languages": {
+    "python": 1200,
+    "c": 800,
+    "javascript": 500
+  }
+}
+```
+
+### Benefits
+
+- **Real-World Relevance**: Code from actual projects and vulnerabilities
+- **Diverse Patterns**: Multiple languages and coding styles
+- **Scalable**: Easy to add new sources
+- **Accurate Translation**: Maintains security semantics during conversion
 
 ### Custom Evaluation
 
