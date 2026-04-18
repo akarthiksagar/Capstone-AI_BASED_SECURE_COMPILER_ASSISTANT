@@ -1,10 +1,13 @@
 import torch
+import hashlib
 
 
 class GraphTensorizer:
 
-    def __init__(self):
-        self.opcode_vocab = {}
+    def __init__(self, opcode_dim=251):
+        # Use fixed-size hashed opcode features so every graph has identical
+        # node feature width (opcode_dim + security_dim = 256 by default).
+        self.opcode_dim = opcode_dim
         self.security_vocab = {
             "None": 0,
             "TRUSTED": 1,
@@ -12,15 +15,13 @@ class GraphTensorizer:
             "SANITIZED": 3,
             "TAINTED": 4
         }
+        self.security_dim = len(self.security_vocab)
 
     # =====================================================
     # Main Entry
     # =====================================================
 
     def tensorize(self, pdg):
-
-        self._build_opcode_vocab(pdg)
-
         node_features = []
         edge_index = []
         edge_types = []
@@ -29,7 +30,7 @@ class GraphTensorizer:
         # Build Node Feature Matrix
         # --------------------------
 
-        for node_id, node_obj in pdg.nodes.items():
+        for _, node_obj in pdg.nodes.items():
 
             opcode = node_obj.features["opcode"]
             sec = node_obj.features["security_level"]
@@ -57,9 +58,18 @@ class GraphTensorizer:
             else:
                 edge_types.append(1)
 
-        X = torch.tensor(node_features, dtype=torch.float)
-        edge_index = torch.tensor(edge_index, dtype=torch.long).t()
-        edge_types = torch.tensor(edge_types, dtype=torch.long)
+        total_dim = self.opcode_dim + self.security_dim
+        if node_features:
+            X = torch.tensor(node_features, dtype=torch.float)
+        else:
+            X = torch.zeros((0, total_dim), dtype=torch.float)
+
+        if edge_index:
+            edge_index = torch.tensor(edge_index, dtype=torch.long).t()
+            edge_types = torch.tensor(edge_types, dtype=torch.long)
+        else:
+            edge_index = torch.zeros((2, 0), dtype=torch.long)
+            edge_types = torch.zeros((0,), dtype=torch.long)
 
         return X, edge_index, edge_types
 
@@ -68,20 +78,18 @@ class GraphTensorizer:
     # =====================================================
 
     def _build_opcode_vocab(self, pdg):
-
-        for node_obj in pdg.nodes.values():
-            opcode = node_obj.features["opcode"]
-            if opcode not in self.opcode_vocab:
-                self.opcode_vocab[opcode] = len(self.opcode_vocab)
+        # No-op retained for backward compatibility.
+        return
 
     # =====================================================
     # Encoders
     # =====================================================
 
     def _encode_opcode(self, opcode):
-
-        vec = [0] * len(self.opcode_vocab)
-        idx = self.opcode_vocab[opcode]
+        # Stable hash -> fixed bucket index
+        opcode_bytes = str(opcode).encode("utf-8", errors="ignore")
+        idx = int(hashlib.sha256(opcode_bytes).hexdigest(), 16) % self.opcode_dim
+        vec = [0] * self.opcode_dim
         vec[idx] = 1
         return vec
 

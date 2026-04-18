@@ -1,4 +1,5 @@
 from collections import defaultdict
+import os
 
 
 class ControlDependenceGraph:
@@ -85,8 +86,10 @@ class ControlDependenceGraph:
     def _compute_control_dependence(self):
 
         for b in self.cfg.blocks:
-            print(b.name, "successors:", [s.name for s in b.successors])
-            # 🔥 Only true branching blocks
+            if os.getenv("SECURELANG_DEBUG_CFG", "0") == "1":
+                print(b.name, "successors:", [s.name for s in b.successors])
+
+            # Only true branching blocks
             if len(b.successors) < 2:
                 continue
 

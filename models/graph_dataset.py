@@ -1,4 +1,5 @@
 import torch
+import os
 from torch.utils.data import Dataset
 
 
@@ -57,6 +58,21 @@ def graph_collate_fn(batch):
         # Ensure tensors
         if not isinstance(X, torch.Tensor):
             X = torch.tensor(X, dtype=torch.float)
+        else:
+            X = X.float()
+
+        # Normalize node feature width across samples.
+        # Default target is 256 to match model_config graph_input_dim.
+        target_dim = int(os.getenv("GRAPH_INPUT_DIM", "256"))
+        if X.dim() == 1:
+            X = X.unsqueeze(0)
+        feature_dim = X.size(1)
+        if feature_dim < target_dim:
+            pad = torch.zeros((X.size(0), target_dim - feature_dim), dtype=X.dtype)
+            X = torch.cat([X, pad], dim=1)
+        elif feature_dim > target_dim:
+            X = X[:, :target_dim]
+
         if not isinstance(edge_index, torch.Tensor):
             edge_index = torch.tensor(edge_index, dtype=torch.long)
         if not isinstance(edge_types, torch.Tensor):

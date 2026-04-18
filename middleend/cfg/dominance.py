@@ -1,4 +1,5 @@
 from collections import defaultdict
+import os
 
 
 class DominanceAnalysis:
@@ -46,12 +47,11 @@ class DominanceAnalysis:
                 if new_dom != dominators[b]:
                     dominators[b] = new_dom
                     changed = True
-        
-        # 🔥 DEBUG DOMINATOR SETS
-        print("\n==== DOMINATOR SETS ====")
-        for b in blocks:
-            print(b.name, ":", [d.name for d in dominators[b]])
 
+        if os.getenv("SECURELANG_DEBUG_CFG", "0") == "1":
+            print("\n==== DOMINATOR SETS ====")
+            for b in blocks:
+                print(b.name, ":", [d.name for d in dominators[b]])
 
         # Immediate dominator
         for b in blocks:
@@ -71,8 +71,8 @@ class DominanceAnalysis:
     # ======================================================
 
     def _compute_dominance_frontier(self):
-        blocks=self.cfg.blocks
-        for b in self.cfg.blocks:
+        blocks = self.cfg.blocks
+        for b in blocks:
             if len(b.predecessors) >= 2:
                 for p in b.predecessors:
                     runner = p
@@ -80,7 +80,7 @@ class DominanceAnalysis:
                         self.dom_frontier[runner].add(b)
                         runner = self.idom[runner]
 
-       # 🔥 DEBUG DOMINANCE FRONTIER
-        print("\n==== DOMINANCE FRONTIER ====")
-        for b in blocks:
-            print(b.name, ":", [x.name for x in self.dom_frontier[b]])
+        if os.getenv("SECURELANG_DEBUG_CFG", "0") == "1":
+            print("\n==== DOMINANCE FRONTIER ====")
+            for b in blocks:
+                print(b.name, ":", [x.name for x in self.dom_frontier[b]])

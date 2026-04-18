@@ -50,6 +50,8 @@ class SemanticAnalyzer(ASTVisitor):
 
         # First pass: register function signatures
         for stmt in node.statements:
+            if stmt is None:
+                continue
             if isinstance(stmt, FunctionDef):
                 self.symbol_table.define_function(
                     FunctionSymbol(stmt.name, stmt.params)
@@ -57,6 +59,8 @@ class SemanticAnalyzer(ASTVisitor):
 
         # Second pass: analyze
         for stmt in node.statements:
+            if stmt is None:
+                continue
             stmt.accept(self)
 
     # -------------------------------------------------
@@ -94,6 +98,8 @@ class SemanticAnalyzer(ASTVisitor):
 
     def visit_Block(self, node):
         for stmt in node.statements:
+            if stmt is None:
+                continue
             stmt.accept(self)
 
     # -------------------------------------------------
