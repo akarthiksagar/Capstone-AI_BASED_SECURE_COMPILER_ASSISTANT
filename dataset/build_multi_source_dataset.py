@@ -4,6 +4,7 @@ from tqdm import tqdm
 import argparse
 import sys
 from pathlib import Path
+from sklearn.model_selection import train_test_split
 
 # Ensure project root is importable when running this file directly.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -51,7 +52,7 @@ def compile_to_graph(code, translator=None, original_lang=None):
     except Exception as e:
         return None, None, None, str(e)  # Error
 
-def build_multi_source_dataset(input_file, output_file, max_samples=None):
+def build_multi_source_dataset(input_file, output_file, max_samples=None, seed=42):
     """Build dataset from multi-source collected data"""
     with open(input_file, 'r') as f:
         dataset = json.load(f)
@@ -99,14 +100,35 @@ def build_multi_source_dataset(input_file, output_file, max_samples=None):
 
     print(f"Successfully compiled {successful} samples, failed {failed}")
 
-    # Split into train/val/test
-    train_size = int(0.7 * len(graph_data))
-    val_size = int(0.15 * len(graph_data))
+    if not graph_data:
+        raise RuntimeError("No compilable samples were produced. Cannot create dataset splits.")
+
+    # Stratified split when possible, fallback to random split otherwise.
+    labels = [s['label'] for s in graph_data]
+    stratify_labels = labels if len(set(labels)) > 1 else None
+
+    train_val, test_split = train_test_split(
+        graph_data,
+        test_size=0.15,
+        random_state=seed,
+        stratify=stratify_labels
+    )
+
+    train_val_labels = [s['label'] for s in train_val]
+    stratify_train_val = train_val_labels if len(set(train_val_labels)) > 1 else None
+    val_ratio = 0.15 / 0.85
+
+    train_split, val_split = train_test_split(
+        train_val,
+        test_size=val_ratio,
+        random_state=seed,
+        stratify=stratify_train_val
+    )
 
     splits = {
-        'train': graph_data[:train_size],
-        'val': graph_data[train_size:train_size + val_size],
-        'test': graph_data[train_size + val_size:]
+        'train': train_split,
+        'val': val_split,
+        'test': test_split
     }
 
     for split_name, split_data in splits.items():
@@ -142,9 +164,10 @@ def main():
     parser.add_argument("--input", default="dataset/multi_source_dataset.json", help="Input dataset file")
     parser.add_argument("--output", default="dataset/multi_source_graph_dataset.pt", help="Output graph dataset")
     parser.add_argument("--max-samples", type=int, help="Maximum samples to process")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for split reproducibility")
     args = parser.parse_args()
 
-    build_multi_source_dataset(args.input, args.output, args.max_samples)
+    build_multi_source_dataset(args.input, args.output, args.max_samples, args.seed)
 
 if __name__ == "__main__":
     main()
