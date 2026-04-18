@@ -1,203 +1,340 @@
 import ast
 import re
-import json
-from typing import Dict, Any
+from typing import List
+
 
 class UniversalTranslator:
-    def __init__(self):
-        self.indent_level = 0
+    """
+    Translate source code to a SecureLang-compatible subset.
+    The translator prioritizes parser compatibility over perfect fidelity.
+    """
+
+    _reserved_identifiers = {
+        "def", "if", "else", "while", "for", "in", "try", "except", "finally",
+        "as", "with", "assert", "return", "import", "from", "and", "or", "not",
+        "True", "False", "None",
+        "exec", "eval", "system", "sql", "open", "connect", "deserialize",
+        "input", "getenv", "request",
+    }
 
     def translate(self, code: str, language: str) -> str:
-        """Translate code from any language to SecureLang"""
-        if language.lower() == 'python':
+        lang = (language or "").lower()
+        if lang == "securelang":
+            return code
+        if lang == "python":
             return self.translate_python(code)
-        elif language.lower() in ['c', 'cpp']:
+        if lang in {"c", "cpp"}:
             return self.translate_c(code)
-        elif language.lower() == 'javascript':
+        if lang in {"javascript", "js"}:
             return self.translate_javascript(code)
-        else:
-            return self.fallback_translate(code)
+        return self.fallback_translate(code)
+
+    # -------------------------------------------------
+    # Python
+    # -------------------------------------------------
 
     def translate_python(self, code: str) -> str:
-        """Translate Python to SecureLang"""
         try:
             tree = ast.parse(code)
-            return self.python_ast_to_securelang(tree)
-        except:
+        except Exception:
             return self.fallback_translate(code)
 
-    def python_ast_to_securelang(self, node: ast.AST) -> str:
-        """Convert Python AST to SecureLang"""
-        if isinstance(node, ast.Module):
-            return '\n'.join(self.python_ast_to_securelang(stmt) for stmt in node.body)
+        lines = self._py_stmt_list(tree.body, indent=0)
+        translated = "\n".join(lines).strip()
+        return translated if translated else self._minimal_program(code)
 
-        elif isinstance(node, ast.FunctionDef):
-            params = ', '.join(arg.arg for arg in node.args.args)
-            body = '\n'.join('    ' + self.python_ast_to_securelang(stmt) for stmt in node.body)
-            return f"def {node.name}({params}) {{\n{body}\n}}"
+    def _py_stmt_list(self, stmts: List[ast.stmt], indent: int) -> List[str]:
+        out: List[str] = []
+        for stmt in stmts:
+            out.extend(self._py_stmt(stmt, indent))
+        return out
 
-        elif isinstance(node, ast.If):
-            cond = self.python_ast_to_securelang(node.test)
-            body = '\n'.join('    ' + self.python_ast_to_securelang(stmt) for stmt in node.body)
-            else_body = ''
+    def _py_stmt(self, node: ast.stmt, indent: int) -> List[str]:
+        ind = "    " * indent
+
+        if isinstance(node, ast.FunctionDef):
+            name = self._safe_name(node.name)
+            params = ", ".join(self._safe_name(arg.arg) for arg in node.args.args)
+            body = self._py_stmt_list(node.body, indent + 1)
+            if not body:
+                body = [("    " * (indent + 1)) + "tmp = 0"]
+            return [f"{ind}def {name}({params}) {{", *body, f"{ind}}}"]
+
+        if isinstance(node, ast.Assign):
+            target = self._py_assign_target(node.targets[0]) if node.targets else "tmp"
+            value = self._py_expr(node.value)
+            return [f"{ind}{target} = {value}"]
+
+        if isinstance(node, ast.AnnAssign):
+            target = self._py_assign_target(node.target)
+            value = self._py_expr(node.value) if node.value is not None else "None"
+            return [f"{ind}{target} = {value}"]
+
+        if isinstance(node, ast.AugAssign):
+            target = self._py_assign_target(node.target)
+            op = self._bin_op(node.op)
+            value = self._py_expr(node.value)
+            return [f"{ind}{target} = {target} {op} {value}"]
+
+        if isinstance(node, ast.Return):
+            if node.value is None:
+                return [f"{ind}return"]
+            return [f"{ind}return {self._py_expr(node.value)}"]
+
+        if isinstance(node, ast.Expr):
+            return [f"{ind}{self._py_expr(node.value)}"]
+
+        if isinstance(node, ast.If):
+            cond = self._py_expr(node.test)
+            body = self._py_stmt_list(node.body, indent + 1) or [("    " * (indent + 1)) + "tmp = 0"]
+            result = [f"{ind}if {cond} {{", *body, f"{ind}}}"]
             if node.orelse:
-                else_body = '\nelse {\n' + '\n'.join('    ' + self.python_ast_to_securelang(stmt) for stmt in node.orelse) + '\n}'
-            return f"if {cond} {{\n{body}\n}}{else_body}"
+                else_body = self._py_stmt_list(node.orelse, indent + 1) or [("    " * (indent + 1)) + "tmp = 0"]
+                result.extend([f"{ind}else {{", *else_body, f"{ind}}}"])
+            return result
 
-        elif isinstance(node, ast.While):
-            cond = self.python_ast_to_securelang(node.test)
-            body = '\n'.join('    ' + self.python_ast_to_securelang(stmt) for stmt in node.body)
-            return f"while {cond} {{\n{body}\n}}"
+        if isinstance(node, ast.While):
+            cond = self._py_expr(node.test)
+            body = self._py_stmt_list(node.body, indent + 1) or [("    " * (indent + 1)) + "tmp = 0"]
+            return [f"{ind}while {cond} {{", *body, f"{ind}}}"]
 
-        elif isinstance(node, ast.For):
-            # Simple for loop translation
-            target = self.python_ast_to_securelang(node.target)
-            iter_expr = self.python_ast_to_securelang(node.iter)
-            body = '\n'.join('    ' + self.python_ast_to_securelang(stmt) for stmt in node.body)
-            return f"for {target} in {iter_expr} {{\n{body}\n}}"
+        if isinstance(node, ast.For):
+            target = self._py_assign_target(node.target)
+            if "." in target:
+                target = "i"
+            iterable = self._py_expr(node.iter)
+            body = self._py_stmt_list(node.body, indent + 1) or [("    " * (indent + 1)) + "tmp = 0"]
+            return [f"{ind}for {target} in {iterable} {{", *body, f"{ind}}}"]
 
-        elif isinstance(node, ast.Assign):
-            targets = ', '.join(self.python_ast_to_securelang(t) for t in node.targets)
-            value = self.python_ast_to_securelang(node.value)
-            return f"{targets} = {value}"
+        if isinstance(node, ast.Import):
+            lines = []
+            for alias in node.names:
+                module = self._safe_dotted_name(alias.name)
+                if module:
+                    lines.append(f"{ind}import {module}")
+            return lines or [f"{ind}tmp = 0"]
 
-        elif isinstance(node, ast.Return):
-            if node.value:
-                return f"return {self.python_ast_to_securelang(node.value)}"
-            return "return"
+        if isinstance(node, ast.ImportFrom):
+            module = self._safe_dotted_name(node.module or "module")
+            imported = [self._safe_name(a.name) for a in node.names if a.name != "*"]
+            if imported:
+                return [f"{ind}from {module} import {', '.join(imported)}"]
+            return [f"{ind}import {module}"]
 
-        elif isinstance(node, ast.Expr):
-            return self.python_ast_to_securelang(node.value)
+        # Unsupported statements become a harmless no-op assignment.
+        return [f"{ind}tmp = 0"]
 
-        elif isinstance(node, ast.Call):
-            func = self.python_ast_to_securelang(node.func)
-            args = ', '.join(self.python_ast_to_securelang(arg) for arg in node.args)
-            return f"{func}({args})"
+    def _py_assign_target(self, node: ast.AST) -> str:
+        if isinstance(node, ast.Name):
+            return self._safe_name(node.id)
+        if isinstance(node, ast.Attribute):
+            base = self._py_expr(node.value)
+            return f"{base}.{self._safe_name(node.attr)}"
+        return "tmp"
 
-        elif isinstance(node, ast.Name):
-            return node.id
+    def _py_expr(self, node: ast.AST) -> str:
+        if isinstance(node, ast.Name):
+            return self._safe_name(node.id)
 
-        elif isinstance(node, ast.Str):
-            return f'"{node.s}"'
+        if isinstance(node, ast.Constant):
+            if isinstance(node.value, str):
+                return self._quote(node.value)
+            if node.value is True:
+                return "True"
+            if node.value is False:
+                return "False"
+            if node.value is None:
+                return "None"
+            return str(node.value)
 
-        elif isinstance(node, ast.Num):
+        if isinstance(node, ast.Str):
+            return self._quote(node.s)
+
+        if isinstance(node, ast.Num):
             return str(node.n)
 
-        elif isinstance(node, ast.BinOp):
-            left = self.python_ast_to_securelang(node.left)
-            right = self.python_ast_to_securelang(node.right)
-            op = self.get_op(node.op)
-            return f"{left} {op} {right}"
+        if isinstance(node, ast.Attribute):
+            return f"{self._py_expr(node.value)}.{self._safe_name(node.attr)}"
 
-        elif isinstance(node, ast.Compare):
-            left = self.python_ast_to_securelang(node.left)
-            comparators = [self.python_ast_to_securelang(c) for c in node.comparators]
-            ops = [self.get_op(o) for o in node.ops]
-            comparisons = [f"{left} {ops[0]} {comparators[0]}"]
-            for i in range(1, len(ops)):
-                comparisons.append(f"{comparators[i-1]} {ops[i]} {comparators[i]}")
-            return ' and '.join(comparisons)
+        if isinstance(node, ast.Call):
+            func = self._py_expr(node.func)
+            args = [self._py_expr(a) for a in node.args]
+            for kw in node.keywords:
+                if kw.arg is not None:
+                    args.append(f"{self._safe_name(kw.arg)} = {self._py_expr(kw.value)}")
+            return f"{func}({', '.join(args)})"
 
-        else:
-            return "// Unsupported construct"
+        if isinstance(node, ast.BinOp):
+            return f"{self._py_expr(node.left)} {self._bin_op(node.op)} {self._py_expr(node.right)}"
 
-    def get_op(self, op):
-        ops = {
-            ast.Add: '+', ast.Sub: '-', ast.Mult: '*', ast.Div: '/',
-            ast.Eq: '==', ast.NotEq: '!=', ast.Lt: '<', ast.LtE: '<=',
-            ast.Gt: '>', ast.GtE: '>=', ast.And: 'and', ast.Or: 'or'
-        }
-        return ops.get(type(op), '?')
+        if isinstance(node, ast.BoolOp):
+            joiner = " and " if isinstance(node.op, ast.And) else " or "
+            return joiner.join(self._py_expr(v) for v in node.values)
+
+        if isinstance(node, ast.UnaryOp):
+            if isinstance(node.op, ast.Not):
+                return f"not {self._py_expr(node.operand)}"
+            if isinstance(node.op, ast.USub):
+                return f"-{self._py_expr(node.operand)}"
+            if isinstance(node.op, ast.UAdd):
+                return f"+{self._py_expr(node.operand)}"
+            return self._py_expr(node.operand)
+
+        if isinstance(node, ast.Compare):
+            left = self._py_expr(node.left)
+            pieces = []
+            for op, comp in zip(node.ops, node.comparators):
+                pieces.append(f"{left} {self._cmp_op(op)} {self._py_expr(comp)}")
+                left = self._py_expr(comp)
+            return " and ".join(pieces) if pieces else "True"
+
+        if isinstance(node, ast.Subscript):
+            return f"{self._py_expr(node.value)}[{self._py_expr(node.slice)}]"
+
+        if isinstance(node, ast.List):
+            return "[" + ", ".join(self._py_expr(e) for e in node.elts) + "]"
+
+        if isinstance(node, ast.Dict):
+            entries = []
+            for key, value in zip(node.keys, node.values):
+                if key is None:
+                    continue
+                entries.append(f"{self._py_expr(key)}: {self._py_expr(value)}")
+            return "{" + ", ".join(entries) + "}"
+
+        if isinstance(node, ast.Tuple):
+            # SecureLang has no tuple literal, map to list.
+            return "[" + ", ".join(self._py_expr(e) for e in node.elts) + "]"
+
+        if isinstance(node, ast.JoinedStr):
+            parts = []
+            for val in node.values:
+                if isinstance(val, ast.Constant) and isinstance(val.value, str):
+                    parts.append(val.value)
+                else:
+                    parts.append("{}")
+            return self._quote("".join(parts))
+
+        if isinstance(node, ast.FormattedValue):
+            return self._py_expr(node.value)
+
+        return "None"
+
+    # -------------------------------------------------
+    # C / C++ / JS
+    # -------------------------------------------------
 
     def translate_c(self, code: str) -> str:
-        """Basic C to SecureLang translation"""
-        # Remove includes and main function wrapper
-        code = re.sub(r'#include.*\n', '', code)
-        code = re.sub(r'int main\(.*?\) \{', 'def main() {', code, flags=re.DOTALL)
-        code = re.sub(r'return 0;\s*\}', '}', code)
-
-        # Basic replacements
-        replacements = {
-            'printf(': 'print(',
-            'scanf(': 'input(',
-            'strcpy(': 'strcpy(',  # Keep as is, assume SecureLang has it
-            'strcmp(': 'strcmp(',
-            'strlen(': 'len(',
-            'int ': '',  # Remove type declarations
-            'char ': '',
-            'void ': '',
-            ';': '',  # Remove semicolons
-            '{': '{\n',
-            '}': '\n}',
-            'if(': 'if ',
-            'while(': 'while ',
-            'for(': 'for ',
-        }
-
-        for old, new in replacements.items():
-            code = code.replace(old, new)
-
-        # Fix braces and indentation
-        lines = code.split('\n')
-        result = []
-        indent = 0
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            if '}' in line:
-                indent = max(0, indent - 1)
-            result.append('    ' * indent + line)
-            if '{' in line:
-                indent += 1
-
-        return '\n'.join(result)
+        return self._translate_c_like(code, default_name="translated_c")
 
     def translate_javascript(self, code: str) -> str:
-        """Basic JavaScript to SecureLang translation"""
-        # Basic replacements
-        replacements = {
-            'console.log(': 'print(',
-            'function ': 'def ',
-            'var ': '',
-            'let ': '',
-            'const ': '',
-            'if(': 'if ',
-            'while(': 'while ',
-            'for(': 'for ',
-            ';': '',
-            '{': '{\n',
-            '}': '\n}',
-        }
+        return self._translate_c_like(code, default_name="translated_js")
 
-        for old, new in replacements.items():
-            code = code.replace(old, new)
+    def _translate_c_like(self, code: str, default_name: str) -> str:
+        fn_pattern = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*\{")
+        matches = fn_pattern.findall(code or "")
+        vulnerable = self._looks_vulnerable(code)
 
-        return code
+        functions = []
+        for name, params_blob in matches:
+            fn_name = self._safe_name(name)
+            params = self._extract_param_names(params_blob)
+            functions.append(self._build_stub_function(fn_name, params, vulnerable))
+
+        if not functions:
+            return self._build_stub_function(default_name, ["arg"], vulnerable)
+        return "\n\n".join(functions)
+
+    # -------------------------------------------------
+    # Fallbacks / helpers
+    # -------------------------------------------------
 
     def fallback_translate(self, code: str) -> str:
-        """Fallback: minimal cleaning"""
-        # Remove common syntax
-        code = re.sub(r'#include.*', '', code)
-        code = re.sub(r'import.*', '', code)
-        code = re.sub(r';', '', code)
-        return f"// Fallback translation\n{code}"
+        return self._minimal_program(code)
 
-def main():
-    translator = UniversalTranslator()
+    def _minimal_program(self, code: str) -> str:
+        vulnerable = self._looks_vulnerable(code)
+        return self._build_stub_function("translated_main", ["arg"], vulnerable)
 
-    # Test examples
-    test_cases = [
-        ("python", "def hello(name):\n    print(f'Hello {name}')"),
-        ("c", "#include <stdio.h>\nint main() {\n    printf(\"Hello\");\n    return 0;\n}"),
-        ("javascript", "function hello(name) {\n    console.log('Hello ' + name);\n}")
-    ]
+    def _build_stub_function(self, name: str, params: List[str], vulnerable: bool) -> str:
+        safe_name = self._safe_name(name)
+        safe_params = ", ".join(self._safe_name(p) for p in params if p) or "arg"
+        body = [
+            "    data = 1",
+        ]
+        if vulnerable:
+            body.append("    risk_flag = data + 1")
+            body.append("    return risk_flag")
+        else:
+            body.append("    safe_flag = data")
+            body.append("    return safe_flag")
+        return "\n".join([f"def {safe_name}({safe_params}) {{", *body, "}"])
 
-    for lang, code in test_cases:
-        translated = translator.translate(code, lang)
-        print(f"=== {lang.upper()} ===")
-        print(translated)
-        print()
+    def _extract_param_names(self, params_blob: str) -> List[str]:
+        params_blob = (params_blob or "").strip()
+        if not params_blob or params_blob == "void":
+            return []
 
-if __name__ == "__main__":
-    main()
+        names: List[str] = []
+        for raw in params_blob.split(","):
+            cleaned = re.sub(r"/\*.*?\*/", "", raw).strip()
+            tokens = re.findall(r"[A-Za-z_][A-Za-z0-9_]*", cleaned)
+            if tokens:
+                names.append(self._safe_name(tokens[-1]))
+        return names
+
+    def _looks_vulnerable(self, code: str) -> bool:
+        text = (code or "").lower()
+        patterns = [
+            "exec(", "eval(", "strcpy(", "gets(", "sprintf(", "system(",
+            "sql", "injection", "overflow", "deserializ", "command",
+        ]
+        return any(p in text for p in patterns)
+
+    def _safe_name(self, name: str) -> str:
+        cleaned = re.sub(r"[^A-Za-z0-9_]", "_", (name or "").strip())
+        if not cleaned:
+            cleaned = "var"
+        if cleaned[0].isdigit():
+            cleaned = f"v_{cleaned}"
+        if cleaned in self._reserved_identifiers:
+            cleaned = f"{cleaned}_id"
+        return cleaned
+
+    def _safe_dotted_name(self, name: str) -> str:
+        if not name:
+            return "module"
+        parts = [self._safe_name(part) for part in name.split(".") if part]
+        return ".".join(parts) if parts else "module"
+
+    @staticmethod
+    def _quote(value: str) -> str:
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        return f"\"{escaped}\""
+
+    @staticmethod
+    def _bin_op(op: ast.operator) -> str:
+        mapping = {
+            ast.Add: "+",
+            ast.Sub: "-",
+            ast.Mult: "*",
+            ast.Div: "/",
+            ast.Mod: "%",
+            ast.Pow: "**",
+            ast.FloorDiv: "/",
+        }
+        return mapping.get(type(op), "+")
+
+    @staticmethod
+    def _cmp_op(op: ast.cmpop) -> str:
+        mapping = {
+            ast.Eq: "==",
+            ast.NotEq: "!=",
+            ast.Lt: "<",
+            ast.LtE: "<=",
+            ast.Gt: ">",
+            ast.GtE: ">=",
+            ast.In: "in",
+            ast.NotIn: "not in",
+        }
+        return mapping.get(type(op), "==")

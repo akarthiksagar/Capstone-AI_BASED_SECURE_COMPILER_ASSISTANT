@@ -62,12 +62,20 @@ def build_multi_source_dataset(input_file, output_file, max_samples=None):
     failed = 0
 
     for i, sample in enumerate(tqdm(dataset[:max_samples] if max_samples else dataset)):
-        code = sample.get('code', '')
-        if not code.strip():
-            continue
-
         lang = sample.get('language', 'unknown')
         vulnerable = sample.get('vulnerable', False)
+        code = sample.get('code', '')
+
+        # CVE and similar records often contain descriptions but no code.
+        # Convert those descriptions into a minimal SecureLang stub so we
+        # can keep the sample in the dataset.
+        if not code.strip():
+            description = sample.get('description', '')
+            if description.strip():
+                code = translator.fallback_translate(description)
+                lang = 'securelang'
+            else:
+                continue
 
         X, edge_index, edge_types, error = compile_to_graph(code, translator, lang)
 

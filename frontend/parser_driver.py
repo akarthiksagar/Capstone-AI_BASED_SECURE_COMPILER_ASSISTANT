@@ -1,4 +1,5 @@
 from antlr4 import *
+import os
 from grammar.generated.SecureLangLexer import SecureLangLexer
 from grammar.generated.SecureLangParser import SecureLangParser
 from frontend.errors.error_listener import SecureLangErrorListener
@@ -32,7 +33,8 @@ class ParserDriver:
         parser.addErrorListener(error_listener)
 
         tree = parser.program()
-        print(tree.toStringTree(recog=parser))
+        if os.getenv("SECURELANG_DEBUG_PARSE_TREE", "0") == "1":
+            print(tree.toStringTree(recog=parser))
         return ParseResult(tree, error_listener.get_errors())
     
 

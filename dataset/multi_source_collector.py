@@ -164,6 +164,35 @@ void vulnerable_buffer(char *input) {
                 ''',
                 'vulnerable': True,
                 'type': 'buffer_overflow'
+            },
+            {
+                'language': 'python',
+                'code': '''
+def safe_sql(user_input):
+    import sqlite3
+    conn = sqlite3.connect('test.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE name = ?", (user_input,))
+    return cursor.fetchall()
+                ''',
+                'vulnerable': False,
+                'type': 'safe_query'
+            },
+            {
+                'language': 'c',
+                'code': '''
+#include <stdio.h>
+#include <string.h>
+
+void safe_buffer(char *input) {
+    char buffer[10];
+    strncpy(buffer, input, sizeof(buffer) - 1);
+    buffer[sizeof(buffer) - 1] = '\\0';
+    printf("%s\\n", buffer);
+}
+                ''',
+                'vulnerable': False,
+                'type': 'safe_buffer_copy'
             }
         ]
 
