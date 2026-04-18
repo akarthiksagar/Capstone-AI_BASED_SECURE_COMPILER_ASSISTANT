@@ -64,7 +64,14 @@ def build_multi_source_dataset(input_file, output_file, max_samples=None, seed=4
 
     for i, sample in enumerate(tqdm(dataset[:max_samples] if max_samples else dataset)):
         lang = sample.get('language', 'unknown')
-        vulnerable = sample.get('vulnerable', False)
+        # Support both schemas:
+        # - multi-source: {"vulnerable": bool}
+        # - juliet/synthetic: {"label": 0/1}
+        if 'vulnerable' in sample:
+            vulnerable = bool(sample.get('vulnerable', False))
+        else:
+            raw_label = sample.get('label', 0)
+            vulnerable = int(raw_label) == 1
         code = sample.get('code', '')
 
         # CVE and similar records often contain descriptions but no code.

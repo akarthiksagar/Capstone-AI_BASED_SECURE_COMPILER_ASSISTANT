@@ -53,7 +53,7 @@
     "model_save_path": "models/secure_gnn_best.pt",
     "checkpoint_dir": "models/checkpoints/",
     "log_dir": "logs/",
-    "save_frequency": 5
+    "save_frequency": 1
   },
   "device": "auto"
 }
