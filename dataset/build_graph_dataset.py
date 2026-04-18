@@ -1,6 +1,13 @@
 import json
 import torch
 from tqdm import tqdm
+import sys
+from pathlib import Path
+
+# Ensure project root is importable when running this file directly.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from frontend.parser_driver import parse_source
 from frontend.semantic.semantic_analyzer import SemanticAnalyzer
