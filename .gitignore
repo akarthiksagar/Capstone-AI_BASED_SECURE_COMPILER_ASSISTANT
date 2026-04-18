@@ -1,23 +1,52 @@
-venv/
+# 🔥 ML / AI (IMPORTANT)
+models/
+models/checkpoints/
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.onnx
+
+# 📦 Dataset
+dataset/
+data/
+*.csv
+*.json
+*.parquet
+
+# 🧪 Training outputs
+runs/
+logs/
+wandb/
+
+# 🧠 Cache / temp
+.cache/
+tmp/
+temp/
+
+# 🐍 Python
 __pycache__/
-juliet_raw
-models/hybrid_model.pt
+*.pyc
+*.pyo
+*.pyd
+.ipynb_checkpoints/
 
+# 🧪 Virtual env
+venv/
+.env
+.env*
 
-# v0 sandbox internal files
-__v0_runtime_loader.js
-__v0_devtools.tsx
-__v0_jsx-dev-runtime.ts
-.npmrc
-.snowflake/
-.v0-trash/
-.vercel/
-next.user-config.*
+# 💻 System files
+.DS_Store
+Thumbs.db
 
-# Environment variables
-.env*.local
-
-# Common ignores
+# 🌐 Node / frontend (you already have some)
 node_modules/
 .next/
-.DS_Store
+
+# 🚀 Deployment / misc
+.vercel/
+.snowflake/
+
+# 🔒 Git (safety)
+*.log
