@@ -2,7 +2,7 @@
 aiohttp==3.13.3
 aiosignal==1.4.0
 annotated-doc==0.0.4
-antlr4-python3-runtime==4.13.1
+antlr4-python3-runtime==4.13.2
 antlr4-tools==0.2.2
 anyio==4.12.1
 attrs==25.4.0
