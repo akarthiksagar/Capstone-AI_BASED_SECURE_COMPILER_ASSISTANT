@@ -16,9 +16,17 @@ import os
 import json
 from pathlib import Path
 import logging
+from collections import OrderedDict
 
-import torch
-import torch.nn as nn
+try:
+    import torch
+    import torch.nn as nn
+    TORCH_AVAILABLE = True
+except ImportError:
+    torch = None
+    nn = None
+    TORCH_AVAILABLE = False
+
 from typing import Dict, List, Tuple, Optional
 
 from pipeline.compiler_pipeline import SecureCompilerPipeline
@@ -90,6 +98,8 @@ class SecureAnalyzer:
         device: str = 'auto',
         confidence_threshold: float = 0.5
     ):
+        if not TORCH_AVAILABLE:
+            raise ImportError("PyTorch is required for SecureAnalyzer but is not installed.")
         """
         Initialize the analyzer.
         
@@ -117,7 +127,13 @@ class SecureAnalyzer:
             raise FileNotFoundError(f"Model not found: {model_path}")
         
         checkpoint = torch.load(model_path, map_location=self.device)
-        config = checkpoint['config']
+        config = checkpoint.get('config') if isinstance(checkpoint, dict) else None
+        state_dict = checkpoint
+
+        if isinstance(checkpoint, dict) and 'model_state' in checkpoint:
+            state_dict = checkpoint['model_state']
+        if config is None:
+            config = self._load_model_config()
         
         # Recreate model
         model = HybridModel(
@@ -127,12 +143,20 @@ class SecureAnalyzer:
             dropout=config['gnn']['dropout']
         )
         
-        model.load_state_dict(checkpoint['model_state'])
+        model.load_state_dict(state_dict)
         model = model.to(self.device)
         model.eval()
         
         logger.info(f"✓ Model loaded from {model_path}")
         return model
+
+    def _load_model_config(self) -> dict:
+        """Load model settings when a checkpoint does not bundle config."""
+        config_path = Path('model_config.json')
+        if not config_path.exists():
+            raise FileNotFoundError("model_config.json not found for model reconstruction")
+        with config_path.open('r', encoding='utf-8') as f:
+            return json.load(f)
     
     @torch.no_grad()
     def analyze(self, code: str) -> VulnerabilityResult:

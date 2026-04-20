@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Shield, Bell, Settings, Search, GitBranch, Play, Loader2, X, Check } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Shield, Bell, Settings, Search, Play, Loader2, X, Sun, Moon, Upload, Github } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -17,10 +17,19 @@ interface DashboardHeaderProps {
   onRunAnalysis?: () => void
   isAnalyzing?: boolean
   onSearch?: (query: string) => void
+  onUploadFile?: () => void
+  onImportGitHub?: () => void
 }
 
-export function DashboardHeader({ onRunAnalysis, isAnalyzing = false, onSearch }: DashboardHeaderProps) {
+export function DashboardHeader({
+  onRunAnalysis,
+  isAnalyzing = false,
+  onSearch,
+  onUploadFile,
+  onImportGitHub,
+}: DashboardHeaderProps) {
   const [searchQuery, setSearchQuery] = useState("")
+  const [theme, setTheme] = useState<"light" | "dark">("light")
 
   const notifications = [
     { id: 1, title: "Critical vulnerability found", time: "2 min ago", read: false },
@@ -31,6 +40,18 @@ export function DashboardHeader({ onRunAnalysis, isAnalyzing = false, onSearch }
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     onSearch?.(searchQuery)
+  }
+
+  useEffect(() => {
+    const isDark = document.documentElement.classList.contains("dark")
+    setTheme(isDark ? "dark" : "light")
+  }, [])
+
+  const toggleTheme = () => {
+    const nextTheme = theme === "dark" ? "light" : "dark"
+    document.documentElement.classList.toggle("dark", nextTheme === "dark")
+    localStorage.setItem("theme", nextTheme)
+    setTheme(nextTheme)
   }
 
   return (
@@ -68,6 +89,36 @@ export function DashboardHeader({ onRunAnalysis, isAnalyzing = false, onSearch }
       </form>
 
       <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          onClick={onUploadFile}
+        >
+          <Upload className="w-4 h-4" />
+          Open File
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          onClick={onImportGitHub}
+        >
+          <Github className="w-4 h-4" />
+          Import GitHub
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleTheme}
+          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+        </Button>
+
         <Button 
           variant="default" 
           size="sm" 

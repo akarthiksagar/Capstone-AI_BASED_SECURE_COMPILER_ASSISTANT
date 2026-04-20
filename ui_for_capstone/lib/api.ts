@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:5000/api";
+const API_URL = "/api";
 
 export interface AnalysisResponse {
   success: boolean;
@@ -33,29 +33,52 @@ export interface AnalysisResponse {
     instructions: string[];
   }>;
   ast_text: string;
+  detected_language?: string;
+  translated_code?: string;
+  model_enabled?: boolean;
+  model_path?: string;
+  model_result?: {
+    is_vulnerable?: boolean;
+    confidence?: number;
+    prediction?: number;
+    probabilities?: Record<string, number>;
+    errors?: string[];
+    vulnerabilities?: Array<Record<string, any>>;
+    graph_stats?: Record<string, any>;
+  };
   error?: string;
   traceback?: string;
 }
 
-export async function analyzeCode(code: string): Promise<AnalysisResponse> {
+export async function analyzeCode(code: string, language?: string): Promise<AnalysisResponse> {
   try {
+    const body: any = { code };
+    if (language) body.language = language;
+
     const response = await fetch(`${API_URL}/analyze`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ code }),
+      body: JSON.stringify(body),
     });
 
-    const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.error || "Failed to analyze code");
+    let data: any
+    const text = await response.text()
+    try {
+      data = text ? JSON.parse(text) : {}
+    } catch {
+      data = { error: `Invalid JSON response from ${API_URL}/analyze (${response.status})`, details: text }
     }
 
-    return data;
+    if (!response.ok) {
+      const message = data.details ? `${data.error || "Failed to analyze code"}: ${data.details}` : (data.error || `Failed to analyze code (${response.status})`)
+      throw new Error(message)
+    }
+
+    return data
   } catch (error) {
-    console.error("API Error:", error);
-    throw error;
+    console.error("API Error:", error)
+    throw error
   }
 }

@@ -1,6 +1,15 @@
 import ast
 import re
+import textwrap
 from typing import List
+
+class TranslationSyntaxError(Exception):
+    """Raised when source syntax is invalid before SecureLang translation."""
+
+    def __init__(self, language: str, message: str):
+        super().__init__(message)
+        self.language = language
+        self.message = message
 
 
 class UniversalTranslator:
@@ -34,14 +43,16 @@ class UniversalTranslator:
     # -------------------------------------------------
 
     def translate_python(self, code: str) -> str:
+        normalized_code = self._normalize_python_code(code)
         try:
-            tree = ast.parse(code)
-        except Exception:
-            return self.fallback_translate(code)
+            tree = ast.parse(normalized_code)
+        except SyntaxError as ex:
+            location = f"line {ex.lineno}, column {ex.offset}" if ex.lineno is not None and ex.offset is not None else "unknown location"
+            raise TranslationSyntaxError("python", f"Python syntax error at {location}: {ex.msg}") from ex
 
         lines = self._py_stmt_list(tree.body, indent=0)
         translated = "\n".join(lines).strip()
-        return translated if translated else self._minimal_program(code)
+        return translated if translated else self._minimal_program(normalized_code)
 
     def _py_stmt_list(self, stmts: List[ast.stmt], indent: int) -> List[str]:
         out: List[str] = []
@@ -225,9 +236,11 @@ class UniversalTranslator:
     # -------------------------------------------------
 
     def translate_c(self, code: str) -> str:
+        self._validate_c_like_syntax(code, "c")
         return self._translate_c_like(code, default_name="translated_c")
 
     def translate_javascript(self, code: str) -> str:
+        self._validate_javascript_syntax(code)
         return self._translate_c_like(code, default_name="translated_js")
 
     def _translate_c_like(self, code: str, default_name: str) -> str:
@@ -251,6 +264,83 @@ class UniversalTranslator:
 
     def fallback_translate(self, code: str) -> str:
         return self._minimal_program(code)
+
+    def _validate_javascript_syntax(self, code: str) -> None:
+        text = (code or "").strip()
+        self._validate_balanced_delimiters(text, "javascript")
+        if "function" in text:
+            if not re.search(r"\bfunction\s+[A-Za-z_][A-Za-z0-9_]*\s*\([^)]*\)\s*\{", text):
+                raise TranslationSyntaxError("javascript", "JavaScript syntax error: malformed function declaration")
+
+    def _validate_c_like_syntax(self, code: str, language: str) -> None:
+        text = (code or "").strip()
+        self._validate_balanced_delimiters(text, language)
+        function_pattern = re.compile(
+            r"\b(?:void|int|char|float|double|long|short|bool|unsigned|signed|static|const)\b[\w\s\*]*\s+[A-Za-z_][A-Za-z0-9_]*\s*\([^)]*\)\s*\{"
+        )
+        if text and not function_pattern.search(text):
+            raise TranslationSyntaxError(language, f"{language.upper()} syntax error: malformed function definition")
+
+    def _validate_balanced_delimiters(self, text: str, language: str) -> None:
+        pairs = {')': '(', '}': '{', ']': '['}
+        openings = set(pairs.values())
+        stack: List[str] = []
+        in_single = False
+        in_double = False
+        escape = False
+
+        for ch in text:
+            if escape:
+                escape = False
+                continue
+            if ch == "\\":
+                escape = True
+                continue
+            if ch == "'" and not in_double:
+                in_single = not in_single
+                continue
+            if ch == '"' and not in_single:
+                in_double = not in_double
+                continue
+            if in_single or in_double:
+                continue
+            if ch in openings:
+                stack.append(ch)
+            elif ch in pairs:
+                if not stack or stack[-1] != pairs[ch]:
+                    raise TranslationSyntaxError(language, f"{language.capitalize()} syntax error: unmatched '{ch}'")
+                stack.pop()
+
+        if in_single or in_double:
+            raise TranslationSyntaxError(language, f"{language.capitalize()} syntax error: unterminated string literal")
+        if stack:
+            raise TranslationSyntaxError(language, f"{language.capitalize()} syntax error: unmatched '{stack[-1]}'")
+
+    def _normalize_python_code(self, code: str) -> str:
+        raw = (code or "").replace("\r\n", "\n")
+        dedented = textwrap.dedent(raw)
+        lines = dedented.splitlines()
+
+        meaningful_indents = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            leading = len(line) - len(line.lstrip(" "))
+            meaningful_indents.append(leading)
+
+        if meaningful_indents:
+            min_indent = min(meaningful_indents)
+            if min_indent > 0:
+                normalized_lines = []
+                for line in lines:
+                    if line.startswith(" " * min_indent):
+                        normalized_lines.append(line[min_indent:])
+                    else:
+                        normalized_lines.append(line)
+                dedented = "\n".join(normalized_lines)
+
+        return dedented.strip()
 
     def _minimal_program(self, code: str) -> str:
         vulnerable = self._looks_vulnerable(code)
@@ -287,7 +377,8 @@ class UniversalTranslator:
         text = (code or "").lower()
         patterns = [
             "exec(", "eval(", "strcpy(", "gets(", "sprintf(", "system(",
-            "sql", "injection", "overflow", "deserializ", "command",
+            "execute(", "execute_query(", "cursor.execute(", "sql",
+            "injection", "overflow", "deserializ", "command",
         ]
         return any(p in text for p in patterns)
 

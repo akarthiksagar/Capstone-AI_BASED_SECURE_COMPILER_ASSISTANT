@@ -5,6 +5,16 @@ from grammar.generated.SecureLangParser import SecureLangParser
 from frontend.errors.error_listener import SecureLangErrorListener
 from frontend.ast_builder import ASTBuilder
 
+
+class ParseSyntaxError(Exception):
+    def __init__(self, errors):
+        self.errors = errors
+        formatted_errors = "; ".join(
+            f"Line {err.line}:{err.column} -> {err.message}" for err in errors
+        )
+        super().__init__(formatted_errors or "Parsing failed")
+
+
 class ParseResult:
     def __init__(self, tree, errors):
         self.tree = tree
@@ -24,11 +34,9 @@ class ParserDriver:
 
         parser = SecureLangParser(token_stream)
 
-        # Remove default error listeners
         lexer.removeErrorListeners()
         parser.removeErrorListeners()
 
-        # Attach custom listener
         error_listener = SecureLangErrorListener()
         parser.addErrorListener(error_listener)
 
@@ -36,7 +44,7 @@ class ParserDriver:
         if os.getenv("SECURELANG_DEBUG_PARSE_TREE", "0") == "1":
             print(tree.toStringTree(recog=parser))
         return ParseResult(tree, error_listener.get_errors())
-    
+
 
 def parse_source(source_code: str):
 
@@ -47,10 +55,10 @@ def parse_source(source_code: str):
         print("====== SYNTAX ERRORS ======")
         for err in result.errors:
             try:
-                print(f"Line {err.line}:{err.column} → {err.message}")
-            except:
+                print(f"Line {err.line}:{err.column} -> {err.message}")
+            except Exception:
                 print(err)
-        raise Exception("Parsing failed")
+        raise ParseSyntaxError(result.errors)
 
     builder = ASTBuilder()
     ast = builder.visit(result.tree)

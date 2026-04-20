@@ -5,14 +5,9 @@ import {
   FileCode,
   Shield,
   FolderTree,
-  GitBranch,
-  Database,
-  Settings,
-  ChevronRight,
-  ChevronDown,
-  File,
-  Folder,
-  Code
+  Code,
+  X,
+  Plus
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -22,6 +17,8 @@ export type SidebarView = "files" | "security" | "dependencies" | "git" | "datab
 interface SidebarProps {
   className?: string
   onFileSelect?: (path: string) => void
+  onFileRemove?: (path: string) => void
+  onAddFile?: () => void
   activeView?: SidebarView
   onViewChange?: (view: SidebarView) => void
   files?: Record<string, string>
@@ -33,7 +30,15 @@ const navItems: { icon: typeof FileCode; label: string; view: SidebarView }[] = 
   { icon: FolderTree, label: "Dependencies", view: "dependencies" },
 ]
 
-export function Sidebar({ className, onFileSelect, activeView = "files", onViewChange, files = {} }: SidebarProps) {
+export function Sidebar({
+  className,
+  onFileSelect,
+  onFileRemove,
+  onAddFile,
+  activeView = "files",
+  onViewChange,
+  files = {},
+}: SidebarProps) {
   const fileNames = Object.keys(files);
 
   return (
@@ -55,19 +60,46 @@ export function Sidebar({ className, onFileSelect, activeView = "files", onViewC
 
       <div className="w-56 flex flex-col border-r border-border bg-sidebar-accent/30">
         <div className="px-3 py-2 border-b border-border">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Examples
-          </span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Files
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              title="Add file"
+              onClick={onAddFile}
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </Button>
+          </div>
         </div>
         <div className="flex-1 overflow-auto py-2">
           {fileNames.map((fileName) => (
             <div
               key={fileName}
-              className="flex items-center gap-1.5 py-1 px-3 hover:bg-secondary/50 cursor-pointer rounded-sm text-sm ml-2 mr-2"
-              onClick={() => onFileSelect?.(fileName)}
+              className="group flex items-center gap-1.5 py-1 px-3 hover:bg-secondary/50 rounded-sm text-sm ml-2 mr-2"
             >
-              <Code className="w-4 h-4 text-muted-foreground" />
-              <span className="truncate">{fileName}</span>
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 items-center gap-1.5 cursor-pointer text-left"
+                onClick={() => onFileSelect?.(fileName)}
+              >
+                <Code className="w-4 h-4 text-muted-foreground" />
+                <span className="truncate">{fileName}</span>
+              </button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
+                title={`Remove ${fileName}`}
+                onClick={() => onFileRemove?.(fileName)}
+              >
+                <X className="w-3.5 h-3.5" />
+              </Button>
             </div>
           ))}
         </div>

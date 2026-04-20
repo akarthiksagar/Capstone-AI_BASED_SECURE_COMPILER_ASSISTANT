@@ -5,4 +5,4 @@ class SyntaxErrorDetail:
         self.message = message
 
     def __str__(self):
-        return f"[SyntaxError] Line {self.line}:{self.column} → {self.message}"
+        return f"[SyntaxError] Line {self.line}:{self.column} -> {self.message}"
